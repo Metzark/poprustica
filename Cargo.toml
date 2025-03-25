@@ -1,0 +1,9 @@
+[package]
+name = "poprustica"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+winit = "0.28"
+wgpu = "0.16"
+pollster = "0.3"
