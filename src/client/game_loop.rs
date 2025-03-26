@@ -1,5 +1,5 @@
 use winit::{
-    event::{Event, WindowEvent},
+    event::{Event, WindowEvent, MouseButton, ElementState},
     event_loop::ControlFlow,
 };
 use std::time::{Duration, Instant};
@@ -55,13 +55,29 @@ impl GameLoop {
             WindowEvent::CursorMoved { position, .. } => {
                 self.mouse_position = (position.x, position.y);
             }
+            WindowEvent::MouseInput { state, button, .. } => {
+                match (button, state) {
+                    (MouseButton::Left, ElementState::Pressed) => {
+                        println!("Left mouse button pressed!");
+                    }
+                    (MouseButton::Left, ElementState::Released) => {
+                        println!("Left mouse button released!");
+                    }
+                    (MouseButton::Right, ElementState::Pressed) => {
+                        println!("Right mouse button pressed!");
+                    }
+                    (MouseButton::Right, ElementState::Released) => {
+                        println!("Right mouse button released!");
+                    }
+                    _ => {}
+                }
+            }
             _ => {}
         }
     }
 
     // Handle updating game state (called once event loop queue is empty)
     fn handle_update(&mut self, control_flow: &mut ControlFlow) {
-        println!("{}, {}", self.mouse_position.0, self.mouse_position.1);
         // Get time right now
         let now = Instant::now();
 
