@@ -5,19 +5,23 @@ use winit::{
 
 pub struct Shell {
     pub window: winit::window::Window,
-    pub event_loop: EventLoop<()>,
 }
 
 impl Shell {
-    pub fn new() -> Self {
-        let event_loop = EventLoop::new();
-        let window = WindowBuilder::new()
+    pub fn new(width: f64, height: f64) -> (Self, EventLoop<()>) {
+        // Create event loop
+        let event_loop: EventLoop<()> = EventLoop::new();
+
+        // Create window
+        let window: winit::window::Window = WindowBuilder::new()
             .with_title("Poprustica")
-            .with_inner_size(winit::dpi::LogicalSize::new(800.0, 600.0))
+            .with_inner_size(winit::dpi::LogicalSize::new(width, height))
+            .with_resizable(false)
             .build(&event_loop)
             .expect("Failed to create window");
 
-        Self { window, event_loop }
+        // Return the new shell and event loop
+        (Self { window }, event_loop)
     }
 }
 
