@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 use crate::client::shell::Shell;
 
+/// The main game loop
 pub struct GameLoop {
     shell: Shell,
     last_render_time: Instant,
@@ -16,6 +17,7 @@ pub struct GameLoop {
 }
 
 impl GameLoop {
+    /// Returns a new game loop
     pub fn new(shell: Shell, framerate: f64, tickrate: f64) -> Self {
         Self {
             shell,
@@ -27,7 +29,7 @@ impl GameLoop {
         }
     }
 
-    // Run a single loop in the game loop
+    /// Run a single loop in the game loop
     pub fn run(&mut self, event: Event<()>, control_flow: &mut ControlFlow) {
         match event {
             Event::WindowEvent { event, window_id } if window_id == self.shell.window.id() => {
@@ -43,7 +45,7 @@ impl GameLoop {
         }
     }
 
-    // Handle all window events
+    /// Handle all window events
     fn handle_window_event(&mut self, event: WindowEvent, control_flow: &mut ControlFlow) {
         match event {
             WindowEvent::CloseRequested => {
@@ -76,7 +78,7 @@ impl GameLoop {
         }
     }
 
-    // Handle updating game state (called once event loop queue is empty)
+    /// Handle updating game state (called once event loop queue is cleared)
     fn handle_update(&mut self, control_flow: &mut ControlFlow) {
         // Get time right now
         let now = Instant::now();
@@ -94,11 +96,11 @@ impl GameLoop {
             self.last_render_time = now;
         }
 
-         // Schedule the next update based on the soonest needed event (tick or frame)
+         // Wait until the 'next tick time' or 'next frame time' (or until another event arrives)
         *control_flow = ControlFlow::WaitUntil((self.last_tick_time + self.tickrate).min(self.last_render_time + self.framerate));
     }
 
-    // Handle rendering a frame
+    /// Handle rendering a frame
     fn handle_render(&mut self) {
     }
 }

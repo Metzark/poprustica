@@ -3,11 +3,13 @@ use winit::{
     window::WindowBuilder,
 };
 
+/// Game shell containing the game window
 pub struct Shell {
     pub window: winit::window::Window,
 }
 
 impl Shell {
+    /// Returns a new game shell containing a window and an event loop attached to the window
     pub fn new(width: f64, height: f64) -> (Self, EventLoop<()>) {
         // Create event loop
         let event_loop: EventLoop<()> = EventLoop::new();
