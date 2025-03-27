@@ -1,2 +1,1 @@
-pub mod shell;
-pub mod game_loop;
+pub mod app;
