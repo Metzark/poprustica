@@ -1,4 +1,8 @@
-use std::time::{Duration, Instant};
+use std::{
+    time::{Duration, Instant},
+    sync::Arc
+};
+
 use winit::{
     application::ApplicationHandler,
     event::{StartCause, WindowEvent, MouseButton, ElementState},
@@ -6,8 +10,10 @@ use winit::{
     window::{Window, WindowId}
 };
 
+use crate::client::grafx::Grafx;
+
 pub struct Game {
-    window: Option<Window>,
+    grafx: Option<Grafx>,
     width: f64,
     height: f64,
     framerate: Duration,
@@ -20,7 +26,7 @@ impl Game {
     // Create a new game
     pub fn new(width: f64, height: f64, framerate: f64) -> Self {
         Self { 
-            window: None,
+            grafx: None,
             width,
             height,
             framerate: Duration::from_secs_f64(1.0 / framerate),
@@ -38,44 +44,50 @@ impl Game {
         .with_resizable(false);
 
         // Create the window
-        self.window = Some(event_loop.create_window(attributes).expect("Failed to create window"));
+        let window = Arc::new(
+            event_loop
+                .create_window(attributes)
+                .expect("Failed to create window"),
+        );
+
+        let grafx = pollster::block_on(Grafx::new(window.clone()));
+        self.grafx = Some(grafx);
     }
+
 }
 
 // Implement the ApplicationHandler trait for Game
 impl ApplicationHandler for Game {
     // Handle all window events
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
-        if let Some(_window) = &self.window {
-            match event {
-                WindowEvent::RedrawRequested => {
-                    self.last_render_time += self.framerate;
-                }
-                WindowEvent::CloseRequested => {
-                    event_loop.exit()
-                }
-                WindowEvent::CursorMoved { position, ..  } => {
-                    self.mouse_position = (position.x, position.y);
-                }
-                WindowEvent::MouseInput { button, state, .. } => {
-                    match (button, state) {
-                        (MouseButton::Left, ElementState::Pressed) => {
-                            println!("Left mouse button pressed!");
-                        }
-                        (MouseButton::Left, ElementState::Released) => {
-                            println!("Left mouse button released!");
-                        }
-                        (MouseButton::Right, ElementState::Pressed) => {
-                            println!("Right mouse button pressed!");
-                        }
-                        (MouseButton::Right, ElementState::Released) => {
-                            println!("Right mouse button released!");
-                        }
-                        _ => {}
-                    }
-                }
-                _ => {}
+        match event {
+            WindowEvent::RedrawRequested => {
+                self.last_render_time += self.framerate;
             }
+            WindowEvent::CloseRequested => {
+                event_loop.exit()
+            }
+            WindowEvent::CursorMoved { position, ..  } => {
+                self.mouse_position = (position.x, position.y);
+            }
+            WindowEvent::MouseInput { button, state, .. } => {
+                match (button, state) {
+                    (MouseButton::Left, ElementState::Pressed) => {
+                        println!("Left mouse button pressed!");
+                    }
+                    (MouseButton::Left, ElementState::Released) => {
+                        println!("Left mouse button released!");
+                    }
+                    (MouseButton::Right, ElementState::Pressed) => {
+                        println!("Right mouse button pressed!");
+                    }
+                    (MouseButton::Right, ElementState::Released) => {
+                        println!("Right mouse button released!");
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
         }
         
     }
@@ -83,7 +95,7 @@ impl ApplicationHandler for Game {
     // Create window on resume (only fired on start)
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // Ensure that a window is only created once (just in case)
-        if self.window.is_none() {
+        if self.grafx.is_none() {
             self.create_window(event_loop);
         }
         // Kickstart the frame rendering loop
@@ -97,9 +109,7 @@ impl ApplicationHandler for Game {
 
         // If its time to render a new frame, call request_redraw
         if now.duration_since(self.last_render_time) >= self.framerate {
-            if let Some(window) = &self.window {
-                window.request_redraw();
-            }
+            self.grafx.as_mut().unwrap().get_window();
         }
 
         // Wait until time to next render or another event arrives (helps prevent cpu from getting slammed)
