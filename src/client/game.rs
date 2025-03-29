@@ -1,5 +1,5 @@
 use std::{
-    time::{Duration, Instant},
+    time::Instant,
     sync::Arc
 };
 
@@ -10,37 +10,33 @@ use winit::{
     window::{Window, WindowId}
 };
 
-use crate::client::grafx::Grafx;
+use crate::client::grafx::{
+    Grafx,
+    WINDOW_HEIGHT,
+    WINDOW_WIDTH,
+};
 
 pub struct Game {
     grafx: Option<Grafx>,
-    width: f64,
-    height: f64,
-    framerate: Duration,
-    last_render_time: Instant,
     mouse_position: (f64, f64)
 }
 
 
 impl Game {
-    // Create a new game
-    pub fn new(width: f64, height: f64, framerate: f64) -> Self {
+    /// Create a new game
+    pub fn new() -> Self {
         Self { 
             grafx: None,
-            width,
-            height,
-            framerate: Duration::from_secs_f64(1.0 / framerate),
-            last_render_time: Instant::now(),
             mouse_position: (0.0, 0.0)
         }
     }
 
-    // Create game window tied to an event loop
+    /// Create game window tied to an event loop
     fn create_window(&mut self, event_loop: &ActiveEventLoop) {
         // Set window attributes
         let attributes = Window::default_attributes()
         .with_title("Poprustica")
-        .with_inner_size(winit::dpi::LogicalSize::new(self.width, self.height))
+        .with_inner_size(winit::dpi::LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT))
         .with_resizable(false);
 
         // Create the window
@@ -58,11 +54,13 @@ impl Game {
 
 // Implement the ApplicationHandler trait for Game
 impl ApplicationHandler for Game {
-    // Handle all window events
+    /// Handle all window events
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
+        let grafx: &mut Grafx = self.grafx.as_mut().expect("Failing retrieveing grafx on new events");
         match event {
             WindowEvent::RedrawRequested => {
-                self.last_render_time += self.framerate;
+                grafx.set_last_render_time(grafx.get_framerate());
+                grafx.render();
             }
             WindowEvent::CloseRequested => {
                 event_loop.exit()
@@ -92,27 +90,39 @@ impl ApplicationHandler for Game {
         
     }
 
-    // Create window on resume (only fired on start)
+    /// Create window on resume (only fired on start)
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // Ensure that a window is only created once (just in case)
         if self.grafx.is_none() {
             self.create_window(event_loop);
         }
+
+        let grafx: &Grafx = self.grafx.as_ref().expect("Failed creating the window due to invalid grafx");
+
         // Kickstart the frame rendering loop
-        event_loop.set_control_flow(ControlFlow::WaitUntil(self.last_render_time + self.framerate));
+        event_loop.set_control_flow(ControlFlow::WaitUntil(grafx.get_last_render_time() + grafx.get_framerate()));
     }
 
-    // Handle new events
+    /// Handle new events
     fn new_events(&mut self, event_loop: &ActiveEventLoop, _cause: StartCause) {
         // Get not
         let now = Instant::now();
 
-        // If its time to render a new frame, call request_redraw
-        if now.duration_since(self.last_render_time) >= self.framerate {
-            self.grafx.as_mut().unwrap().get_window();
-        }
 
-        // Wait until time to next render or another event arrives (helps prevent cpu from getting slammed)
-        event_loop.set_control_flow(ControlFlow::WaitUntil(self.last_render_time + self.framerate));
+        match self.grafx.as_ref() {
+            Some(grafx) => {
+                // If its time to render a new frame, call request_redraw
+                if now.duration_since(grafx.get_last_render_time()) >= grafx.get_framerate() {
+                    grafx.get_window().request_redraw();
+                }
+
+                // Wait until time to next render or another event arrives
+                event_loop.set_control_flow(ControlFlow::WaitUntil(
+                    grafx.get_last_render_time() + grafx.get_framerate()
+                ));
+            }
+            None => {
+            }
+        }
     }
 }
