@@ -11,11 +11,10 @@ use winit::{
 };
 
 use crate::client::grafx::Grafx;
+use crate::client::config;
 
 pub struct Game {
     grafx: Option<Grafx>,
-    width: f64,
-    height: f64,
     framerate: Duration,
     last_render_time: Instant,
     mouse_position: (f64, f64)
@@ -24,12 +23,10 @@ pub struct Game {
 
 impl Game {
     // Create a new game
-    pub fn new(width: f64, height: f64, framerate: f64) -> Self {
+    pub fn new() -> Self {
         Self { 
             grafx: None,
-            width,
-            height,
-            framerate: Duration::from_secs_f64(1.0 / framerate),
+            framerate: Duration::from_secs_f64(1.0 / config::FRAMERATE),
             last_render_time: Instant::now(),
             mouse_position: (0.0, 0.0)
         }
@@ -40,7 +37,7 @@ impl Game {
         // Set window attributes
         let attributes = Window::default_attributes()
         .with_title("Poprustica")
-        .with_inner_size(winit::dpi::LogicalSize::new(self.width, self.height))
+        .with_inner_size(winit::dpi::LogicalSize::new(config::WINDOW_WIDTH, config::WINDOW_HEIGHT))
         .with_resizable(false);
 
         // Create the window
@@ -63,6 +60,13 @@ impl ApplicationHandler for Game {
         match event {
             WindowEvent::RedrawRequested => {
                 self.last_render_time += self.framerate;
+
+                match &mut self.grafx {
+                    Some(grafx) => {
+                        grafx.render();
+                    }
+                    _ => {}
+                }
             }
             WindowEvent::CloseRequested => {
                 event_loop.exit()
