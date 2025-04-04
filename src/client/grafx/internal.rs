@@ -1,7 +1,8 @@
-// This files contains internal functions to be used by the Grafx module
+// This files contains internal functions to be used by the Grafx module (mostly wgpu stuff)
+use std;
 use bytemuck;
 use image::GenericImageView;
-use anyhow::Result;
+use anyhow::{Error, Result};
 use wgpu::util::DeviceExt;
 use wgpu;
 
@@ -163,69 +164,35 @@ impl Vertex {
     }
 }
 
-pub struct Sprite {
-    pub vertex_buffer: wgpu::Buffer,
-    pub index_buffer: wgpu::Buffer,
-    pub num_indices: u32,
+pub struct TextureBindGroup {
     pub bind_group: wgpu::BindGroup,
 }
 
-impl Sprite {
-    pub fn fullscreen_quad(device: &wgpu::Device, texture_bind_group: &wgpu::BindGroup) -> Self {
-        let vertices = &[
-            Vertex { position: [-1.0,  1.0, 0.0], tex_coords: [0.0, 0.0] }, // Top-left
-            Vertex { position: [-1.0, -1.0, 0.0], tex_coords: [0.0, 1.0] }, // Bottom-left
-            Vertex { position: [ 1.0, -1.0, 0.0], tex_coords: [1.0, 1.0] }, // Bottom-right
-            Vertex { position: [ 1.0,  1.0, 0.0], tex_coords: [1.0, 0.0] }, // Top-right
-        ];
-
-        let indices: &[u16] = &[0, 1, 2, 0, 2, 3];
-
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Sprite Vertex Buffer"),
-            contents: bytemuck::cast_slice(vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Sprite Index Buffer"),
-            contents: bytemuck::cast_slice(indices),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-
-        Sprite {
-            vertex_buffer,
-            index_buffer,
-            num_indices: indices.len() as u32,
-            bind_group: texture_bind_group.clone(),
+impl TextureBindGroup {
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, bind_group_layout: &wgpu::BindGroupLayout, path_to_img: String, label: String) -> Result<Self, Error> {
+        // Get image bytes
+        let img_bytes = match std::fs::read(&path_to_img) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                println!("Failed to read file at '{}': {}", path_to_img, e);
+                return Err(e.into());
+            }
+        };
+    
+        if img_bytes.is_empty() {
+            println!("No data read from file at '{}'", path_to_img);
+            return Err(anyhow::anyhow!("Empty image file"));
         }
-    }
 
-    pub fn draw<'a>(&'a self, render_pass: &mut wgpu::RenderPass<'a>) {
-        render_pass.set_bind_group(0, &self.bind_group, &[]);
-        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
-    }
-}
+        let img = image::load_from_memory(&img_bytes)
+            .map_err(|err| {
+                println!("Failed to load image: {}", err);
+                err
+            })?;
 
-pub struct Texture {
-    #[allow(unused)]
-    pub texture: wgpu::Texture,
-    pub view: wgpu::TextureView,
-    pub sampler: wgpu::Sampler,
-}
-
-impl Texture {
-    pub fn from_bytes(device: &wgpu::Device, queue: &wgpu::Queue, bytes: &[u8], label: &str) -> Result<Self,> {
-        let img = image::load_from_memory(bytes)?;
-        Self::from_image(device, queue, &img, Some(label))
-    }
-
-    pub fn from_image(device: &wgpu::Device, queue: &wgpu::Queue, img: &image::DynamicImage, label: Option<&str>) -> Result<Self> {
         let rgba = img.to_rgba8();
         let dimensions = img.dimensions();
-
+        
         let size = wgpu::Extent3d {
             width: dimensions.0,
             height: dimensions.1,
@@ -233,7 +200,7 @@ impl Texture {
         };
         let texture = device.create_texture(
             &wgpu::TextureDescriptor {
-                label,
+                label: Some(&label),
                 size,
                 mip_level_count: 1,
                 sample_count: 1,
@@ -266,13 +233,80 @@ impl Texture {
                 address_mode_u: wgpu::AddressMode::MirrorRepeat,
                 address_mode_v: wgpu::AddressMode::ClampToEdge,
                 address_mode_w: wgpu::AddressMode::ClampToEdge,
-                mag_filter: wgpu::FilterMode::Linear,
+                mag_filter: wgpu::FilterMode::Nearest,
                 min_filter: wgpu::FilterMode::Nearest,
                 mipmap_filter: wgpu::FilterMode::Nearest,
                 ..Default::default()
             }
         );
 
-        Ok(Self { texture, view, sampler })
+        let bind_group = device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                layout: &bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&sampler),
+                    }
+                ],
+                label: Some(&label),
+            }
+        );
+
+        Ok(Self { bind_group })
+    }
+
+    pub fn get_bind_group(&self) -> &wgpu::BindGroup {
+        &self.bind_group
+    }
+}
+
+pub struct Sprite {
+    pub vertex_buffer: wgpu::Buffer,
+    pub index_buffer: wgpu::Buffer,
+    pub num_indices: u32,
+    pub bind_group_key: String,
+}
+
+impl Sprite {
+    pub fn fullscreen_quad(device: &wgpu::Device, bind_group_key: String) -> Self {
+        let vertices = &[
+            Vertex { position: [-1.0,  1.0, 0.0], tex_coords: [0.0, 0.0] }, // Top-left
+            Vertex { position: [-1.0, -1.0, 0.0], tex_coords: [0.0, 1.0] }, // Bottom-left
+            Vertex { position: [ 1.0, -1.0, 0.0], tex_coords: [1.0, 1.0] }, // Bottom-right
+            Vertex { position: [ 1.0,  1.0, 0.0], tex_coords: [1.0, 0.0] }, // Top-right
+        ];
+
+        let indices: &[u16] = &[0, 1, 2, 0, 2, 3];
+
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Sprite Vertex Buffer"),
+            contents: bytemuck::cast_slice(vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Sprite Index Buffer"),
+            contents: bytemuck::cast_slice(indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        Sprite {
+            vertex_buffer,
+            index_buffer,
+            num_indices: indices.len() as u32,
+            bind_group_key,
+        }
+    }
+
+    pub fn draw<'a>(&'a self, render_pass: &mut wgpu::RenderPass<'a>, bind_group: &'a wgpu::BindGroup) {
+        render_pass.set_bind_group(0, bind_group, &[]);
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
     }
 }

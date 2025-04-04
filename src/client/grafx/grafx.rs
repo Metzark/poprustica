@@ -5,18 +5,15 @@ use std::{
 use wgpu;
 use winit::window::Window;
 
-use super::internal::{self, Sprite};
+use super::internal::{self};
 
 pub struct Grafx {
     window: Arc<Window>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
-    config: wgpu::SurfaceConfiguration,
-    size: winit::dpi::PhysicalSize<u32>,
     render_pipeline: wgpu::RenderPipeline,
-    shader_map: HashMap<u8, wgpu::ShaderModule>,
-    bind_group_map: HashMap<String, wgpu::BindGroup>,
+    bind_group_map: HashMap<String, internal::TextureBindGroup>,
     sprite_map: HashMap<String, internal::Sprite>
 }
 
@@ -57,49 +54,30 @@ impl Grafx {
         // Create a render pipe (going to use one for everything for now)
         let render_pipeline: wgpu::RenderPipeline = internal::create_render_pipeline(&device, &render_pipeline_layout, &shader, &config);
 
-        // Create map of shaders
-        let shader_map: HashMap<u8, wgpu::ShaderModule> = HashMap::new();
-
         // Create map of bind groups
-        let bind_group_map: HashMap<String, wgpu::BindGroup> = HashMap::new();
+        let mut bind_group_map: HashMap<String, internal::TextureBindGroup> = HashMap::new();
 
         let mut sprite_map: HashMap<String, internal::Sprite> = HashMap::new();
 
-        let diffuse_bytes = include_bytes!("../assets/bg1.png");
-        let diffuse_texture = internal::Texture::from_bytes(&device, &queue, diffuse_bytes, "../assets/bg1.png").unwrap();
+        let texture_bind_group = internal::TextureBindGroup::new(&device, &queue, &bind_group_layout, String::from("src/client/assets/bg_1.png"), String::from("background"));
 
-        let diffuse_bind_group = device.create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                layout: &bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-                    }
-                ],
-                label: Some("diffuse_bind_group"),
+        match texture_bind_group {
+            Ok(bind_group) => {
+                let background: internal::Sprite = internal::Sprite::fullscreen_quad(&device, String::from("background"));
+                bind_group_map.insert(String::from("background"), bind_group);
+                sprite_map.insert(String::from("background"), background);
             }
-        );
-
-        // bind_group_map.insert(String::from("background"), diffuse_bind_group);
-
-        let background: internal::Sprite = internal::Sprite::fullscreen_quad(&device, &diffuse_bind_group);
-
-        sprite_map.insert(String::from("background"), background);
+            Err(_err) => {
+                println!("background not loaded");
+            }
+        }
      
         let grafx = Grafx {
             window,
             device,
             queue,
             surface,
-            size,
-            config,
             render_pipeline,
-            shader_map,
             bind_group_map,
             sprite_map
         };
@@ -141,13 +119,10 @@ impl Grafx {
 
         let mut rendered = false;
 
-        match self.sprite_map.get("background") {
-            Some(sprite) => {
-                sprite.draw(&mut render_pass);
+        if let Some(sprite) = self.sprite_map.get("background") {
+            if let Some(bind_group) = self.bind_group_map.get(&sprite.bind_group_key) {
+                sprite.draw(&mut render_pass, bind_group.get_bind_group());
                 rendered = true;
-            }
-            None => {
-                println!("No render");
             }
         }
 

@@ -63,7 +63,7 @@ impl ApplicationHandler for Game {
 
                 match &mut self.grafx {
                     Some(grafx) => {
-                        grafx.render();
+                        let _ = grafx.render();
                     }
                     _ => {}
                 }
@@ -113,7 +113,7 @@ impl ApplicationHandler for Game {
 
         // If its time to render a new frame, call request_redraw
         if now.duration_since(self.last_render_time) >= self.framerate {
-            self.grafx.as_mut().unwrap().get_window();
+            self.grafx.as_mut().unwrap().get_window().request_redraw();
         }
 
         // Wait until time to next render or another event arrives (helps prevent cpu from getting slammed)
