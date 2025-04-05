@@ -12,7 +12,8 @@ pub struct Grafx {
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
-    render_pipeline: wgpu::RenderPipeline,
+    static_render_pipeline: wgpu::RenderPipeline,
+    dynamic_render_pipeline: wgpu::RenderPipeline,
     bind_group_map: HashMap<String, internal::TextureBindGroup>,
     sprite_map: HashMap<String, internal::Sprite>
 }
@@ -40,30 +41,44 @@ impl Grafx {
         // Configure surface for presentation
         surface.configure(&device, &config);
 
-        // Create a single bind group layout to be shared by all bind groups
+        // Create a single bind group layout to be shared by all static bind groups
         let bind_group_layout: wgpu::BindGroupLayout = internal::create_bind_group_layout(&device);
 
-        let shader: wgpu::ShaderModule = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/sprite.wgsl").into()),
+        // Create a single bind group layout to be shared by all dynamic bind groups
+        let uniform_bind_group_layout: wgpu::BindGroupLayout = internal::create_uniform_bind_group_layout(&device);
+
+        let static_shader: wgpu::ShaderModule = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Static Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/static.wgsl").into()),
         });
 
-        // Create a render pipeline layout to be used by render pipelines
-        let render_pipeline_layout: wgpu::PipelineLayout = internal::create_render_pipeline_layout(&device, &bind_group_layout);
+        let dynamic_shader: wgpu::ShaderModule = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Dynamic Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/dynamic.wgsl").into()),
+        });
 
-        // Create a render pipe (going to use one for everything for now)
-        let render_pipeline: wgpu::RenderPipeline = internal::create_render_pipeline(&device, &render_pipeline_layout, &shader, &config);
+        // Create a render pipeline layout to be used by static render pipeline
+        let static_render_pipeline_layout: wgpu::PipelineLayout = internal::create_static_render_pipeline_layout(&device, &bind_group_layout);
+
+        // Create a render pipeline layout to be used by dynamic render pipeline
+        let dynamic_render_pipeline_layout: wgpu::PipelineLayout = internal::create_dynamic_render_pipeline_layout(&device, &bind_group_layout, &uniform_bind_group_layout);
+
+        // Create a render pipeline for static sprites
+        let static_render_pipeline: wgpu::RenderPipeline = internal::create_render_pipeline(&device, &static_render_pipeline_layout, &static_shader, &config);
+
+        // Create a render pipeline for dynamic sprites (they can move once created)
+        let dynamic_render_pipeline: wgpu::RenderPipeline = internal::create_render_pipeline(&device, &dynamic_render_pipeline_layout, &dynamic_shader, &config);
 
         // Create map of bind groups
         let mut bind_group_map: HashMap<String, internal::TextureBindGroup> = HashMap::new();
 
         let mut sprite_map: HashMap<String, internal::Sprite> = HashMap::new();
 
-        let texture_bind_group = internal::TextureBindGroup::new(&device, &queue, &bind_group_layout, String::from("src/client/assets/bg_1.png"), String::from("background"));
+        let texture_bind_group = internal::TextureBindGroup::new(&device, &queue, &bind_group_layout, String::from("assets/bg_1.png"), String::from("background"));
 
         match texture_bind_group {
             Ok(bind_group) => {
-                let background: internal::Sprite = internal::Sprite::fullscreen_quad(&device, String::from("background"));
+                let background: internal::Sprite = internal::Sprite::background(&device, String::from("background"));
                 bind_group_map.insert(String::from("background"), bind_group);
                 sprite_map.insert(String::from("background"), background);
             }
@@ -77,7 +92,8 @@ impl Grafx {
             device,
             queue,
             surface,
-            render_pipeline,
+            static_render_pipeline,
+            dynamic_render_pipeline,
             bind_group_map,
             sprite_map
         };
@@ -115,7 +131,7 @@ impl Grafx {
             timestamp_writes: None,
         });
 
-        render_pass.set_pipeline(&self.render_pipeline);
+        render_pass.set_pipeline(&self.static_render_pipeline);
 
         let mut rendered = false;
 

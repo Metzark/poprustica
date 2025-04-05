@@ -53,7 +53,7 @@ pub fn create_surface_configuration(adapter: &wgpu::Adapter, surface: &wgpu::Sur
     }
 }
 
-/// Create a bind group layout to be used by all bind groups (for now)
+/// Create a bind group layout to be used by bind groups for all sprites
 pub fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         entries: &[
@@ -80,15 +80,45 @@ pub fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout 
     })
 }
 
+/// Create a bind group layout to be used by bind groups for dynamic sprites
+pub fn create_uniform_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,  // Only needed in vertex shader
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }
+        ],
+        label: Some("sprite_uniform_bind_group_layout"),
+    })
+}
+
 /// Create a render pipeline layout
-pub fn create_render_pipeline_layout(device: &wgpu::Device, bind_group_layout: &wgpu::BindGroupLayout) -> wgpu::PipelineLayout {
+pub fn create_static_render_pipeline_layout(device: &wgpu::Device, bind_group_layout: &wgpu::BindGroupLayout) -> wgpu::PipelineLayout {
     device.create_pipeline_layout(
         &wgpu::PipelineLayoutDescriptor {
-            label: Some("Render Pipeline Layout"),
+            label: Some("Static Render Pipeline Layout"),
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
         }
     )
+}
+
+pub fn create_dynamic_render_pipeline_layout(device: &wgpu::Device, texture_bind_group_layout: &wgpu::BindGroupLayout,uniform_bind_group_layout: &wgpu::BindGroupLayout) -> wgpu::PipelineLayout {
+    device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("Dynamic Render Pipeline Layout"),
+        bind_group_layouts: &[
+            texture_bind_group_layout,
+            uniform_bind_group_layout,
+        ],
+        push_constant_ranges: &[],
+    })
 }
 
 /// Create a render pipeline
@@ -273,7 +303,7 @@ pub struct Sprite {
 }
 
 impl Sprite {
-    pub fn fullscreen_quad(device: &wgpu::Device, bind_group_key: String) -> Self {
+    pub fn background(device: &wgpu::Device, bind_group_key: String) -> Self {
         let vertices = &[
             Vertex { position: [-1.0,  1.0, 0.0], tex_coords: [0.0, 0.0] }, // Top-left
             Vertex { position: [-1.0, -1.0, 0.0], tex_coords: [0.0, 1.0] }, // Bottom-left

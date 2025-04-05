@@ -13,5 +13,5 @@ fn main() {
     let mut game: Game = Game::new();
 
     // Run the game using the event loop
-    event_loop.run_app(&mut game).expect("Failed to run app");
+    event_loop.run_app(&mut game).expect("Failed to run game");
 }
